@@ -1,15 +1,20 @@
 {
   "manifest_version": 3,
-  "name": "EasyRead — Read Aloud",
-  "version": "1.0.0",
-  "description": "Reads selected text or the whole article aloud, word by word, in a clean reader view. Built-in voices, no account, no tracking.",
-  "permissions": ["contextMenus", "scripting", "storage", "activeTab"],
+  "name": "EasyRead \u2014 Read Aloud",
+  "version": "2.0.0",
+  "description": "Speed-read any selected text or article: flashes one magnified word at a time at your chosen WPM, with a fixed focus point. No audio, no account, no tracking.",
+  "permissions": [
+    "contextMenus",
+    "scripting",
+    "storage",
+    "activeTab"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "EasyRead — Read Aloud",
+    "default_title": "EasyRead \u2014 Read Aloud",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -23,8 +28,10 @@
   },
   "commands": {
     "read-aloud": {
-      "suggested_key": { "default": "Alt+R" },
-      "description": "Read selection (or page) aloud"
+      "suggested_key": {
+        "default": "Alt+R"
+      },
+      "description": "Speed-read selection (or page)"
     }
   }
 }

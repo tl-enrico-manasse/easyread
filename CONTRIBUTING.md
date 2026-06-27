@@ -34,10 +34,12 @@ Before opening a PR, confirm on at least one news article and one long page:
 
 - [ ] Reads a selection when text is selected.
 - [ ] Reads the main article when nothing is selected.
-- [ ] Word highlighting tracks the narration and auto-scrolls.
-- [ ] Play / pause / stop, speed, and voice all work.
-- [ ] Click-to-jump starts from the clicked word.
-- [ ] Closing (✕ / `Esc`) stops speech and removes the overlay.
+- [ ] Words flash one at a time and the red focus point stays centered.
+- [ ] Play / pause, step back/forward, restart, and the WPM slider all work.
+- [ ] Keyboard shortcuts work (Space, arrow keys, Esc).
+- [ ] Progress bar and word counter advance correctly and finish at the end.
+- [ ] Closing (close button / Esc / backdrop click) stops playback and removes the overlay.
+
 
 ## Commit messages
 
@@ -47,5 +49,4 @@ Short, imperative summaries (e.g. `Fix scroll jitter at high speed`).
 ## Reporting bugs
 
 Open an issue with your browser + version, the page URL (if shareable), the
-selected voice, and steps to reproduce. Highlighting issues are often
-voice-specific (some voices don't emit `boundary` events), so the voice name helps.
+selected voice, and steps to reproduce. Include the page URL and WPM so issues are reproducible.

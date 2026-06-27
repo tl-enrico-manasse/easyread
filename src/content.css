@@ -1,134 +1,142 @@
-/* EasyRead overlay styles. Scoped under #easyread-panel and forced with
-   !important so host-page CSS can't break the reader. */
+/* EasyRead RSVP overlay. Scoped under #easyread-overlay and forced with
+   !important so host-page CSS can't interfere. */
 
-#easyread-panel {
+#easyread-overlay {
   position: fixed !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
+  inset: 0 !important;
   z-index: 2147483647 !important;
-  height: 44vh !important;
-  background: #ffffff !important;
-  color: #1a1a1a !important;
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18) !important;
-  border-top: 1px solid #e5e5e5 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-  display: flex !important;
-  flex-direction: column !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-#easyread-panel * {
-  box-sizing: border-box !important;
-}
-
-#easyread-panel .er-bar {
   display: flex !important;
   align-items: center !important;
-  justify-content: space-between !important;
-  gap: 12px !important;
-  padding: 10px 16px !important;
-  background: #fafafa !important;
-  border-bottom: 1px solid #ececec !important;
-  flex: 0 0 auto !important;
+  justify-content: center !important;
+  background: rgba(15, 14, 22, 0.82) !important;
+  backdrop-filter: blur(3px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
 }
 
-#easyread-panel .er-title {
-  font-weight: 700 !important;
-  font-size: 14px !important;
-  letter-spacing: 0.3px !important;
-  color: #6c4ad6 !important;
+#easyread-overlay * { box-sizing: border-box !important; }
+
+#easyread-overlay .er-card {
+  position: relative !important;
+  width: min(760px, 92vw) !important;
+  background: #1c1b22 !important;
+  border: 1px solid #2e2c38 !important;
+  border-radius: 18px !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55) !important;
+  padding: 28px 26px 22px !important;
+  color: #f3f2f7 !important;
 }
 
-#easyread-panel .er-controls {
+#easyread-overlay .er-x {
+  position: absolute !important;
+  top: 12px !important; right: 14px !important;
+  width: 30px !important; height: 30px !important;
+  border: none !important; border-radius: 8px !important;
+  background: #2a2933 !important; color: #c9c7d4 !important;
+  font-size: 14px !important; cursor: pointer !important;
+}
+#easyread-overlay .er-x:hover { background: #36343f !important; }
+
+/* The word stage with fixed centre guides. */
+#easyread-overlay .er-stage {
+  position: relative !important;
+  height: 150px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+#easyread-overlay .er-guide {
+  position: absolute !important;
+  left: 50% !important;
+  width: 2px !important;
+  height: 14px !important;
+  background: #6c4ad6 !important;
+  transform: translateX(-1px) !important;
+}
+#easyread-overlay .er-guide-top { top: 6px !important; }
+#easyread-overlay .er-guide-bottom { bottom: 6px !important; }
+
+#easyread-overlay .er-display {
+  position: relative !important;
+  width: 100% !important;
+  height: 1.4em !important;
+  font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+  font-size: clamp(34px, 6vw, 62px) !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+}
+#easyread-overlay .er-rsvp-word {
+  position: absolute !important;
+  top: 0 !important;
+  white-space: pre !important;
+  color: #f3f2f7 !important;
+}
+#easyread-overlay .er-orp { color: #ff4d4d !important; }
+
+/* Progress + controls */
+#easyread-overlay .er-track {
+  height: 4px !important;
+  background: #2a2933 !important;
+  border-radius: 3px !important;
+  margin: 18px 0 16px !important;
+  overflow: hidden !important;
+}
+#easyread-overlay .er-track-fill {
+  height: 100% !important;
+  width: 0% !important;
+  background: #6c4ad6 !important;
+  transition: width 0.08s linear !important;
+}
+
+#easyread-overlay .er-controls {
   display: flex !important;
   align-items: center !important;
   gap: 10px !important;
   flex-wrap: wrap !important;
 }
-
-#easyread-panel .er-btn {
-  appearance: none !important;
+#easyread-overlay .er-btn {
   border: none !important;
-  background: #6c4ad6 !important;
-  color: #fff !important;
-  width: 34px !important;
-  height: 34px !important;
-  border-radius: 8px !important;
-  font-size: 15px !important;
-  line-height: 1 !important;
+  background: #2a2933 !important;
+  color: #f3f2f7 !important;
+  height: 38px !important;
+  min-width: 44px !important;
+  padding: 0 12px !important;
+  border-radius: 10px !important;
+  font-size: 14px !important;
   cursor: pointer !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  padding: 0 !important;
 }
-#easyread-panel .er-btn:hover { background: #5a3cc0 !important; }
-#easyread-panel .er-close {
-  background: #efefef !important;
-  color: #444 !important;
+#easyread-overlay .er-btn:hover { background: #36343f !important; }
+#easyread-overlay .er-play {
+  background: #6c4ad6 !important;
+  min-width: 52px !important;
+  font-size: 16px !important;
 }
-#easyread-panel .er-close:hover { background: #e2e2e2 !important; }
+#easyread-overlay .er-play:hover { background: #5a3cc0 !important; }
 
-#easyread-panel .er-speed {
+#easyread-overlay .er-counter {
+  font-size: 12px !important;
+  color: #a7a4b6 !important;
+  font-variant-numeric: tabular-nums !important;
+  margin-left: 4px !important;
+}
+#easyread-overlay .er-wpm {
   display: inline-flex !important;
   align-items: center !important;
-  gap: 6px !important;
-  font-size: 12px !important;
-  color: #555 !important;
+  gap: 8px !important;
+  margin-left: auto !important;
 }
-#easyread-panel .er-speed input[type="range"] {
-  width: 90px !important;
+#easyread-overlay .er-wpm input[type="range"] {
+  width: 130px !important;
   accent-color: #6c4ad6 !important;
 }
-#easyread-panel #er-rate-val {
-  font-variant-numeric: tabular-nums !important;
-  min-width: 34px !important;
-  color: #333 !important;
-}
-
-#easyread-panel .er-voice {
-  max-width: 200px !important;
+#easyread-overlay #er-wpm-val {
   font-size: 12px !important;
-  padding: 6px 8px !important;
-  border: 1px solid #d8d8d8 !important;
-  border-radius: 8px !important;
-  background: #fff !important;
-  color: #222 !important;
-}
-
-#easyread-panel .er-reader {
-  flex: 1 1 auto !important;
-  overflow-y: auto !important;
-  padding: 24px max(16px, calc((100% - 760px) / 2)) 40px !important;
-  font-size: 21px !important;
-  line-height: 1.7 !important;
-  white-space: pre-wrap !important;
-  color: #222 !important;
-  outline: none !important;
-}
-
-#easyread-panel .er-word {
-  cursor: pointer !important;
-  border-radius: 4px !important;
-  transition: background 0.1s ease !important;
-}
-#easyread-panel .er-word:hover {
-  background: #efeaff !important;
-}
-#easyread-panel .er-word.er-active {
-  background: #ffe27a !important;
-  color: #1a1a1a !important;
-  box-shadow: 0 0 0 2px #ffe27a !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  #easyread-panel { background: #1e1e22 !important; color: #eaeaea !important; border-top-color: #333 !important; }
-  #easyread-panel .er-bar { background: #26262b !important; border-bottom-color: #333 !important; }
-  #easyread-panel .er-reader { color: #e6e6e6 !important; }
-  #easyread-panel .er-voice { background: #2a2a30 !important; color: #eee !important; border-color: #444 !important; }
-  #easyread-panel .er-word:hover { background: #3a3358 !important; }
-  #easyread-panel .er-word.er-active { background: #ffd54a !important; color: #111 !important; box-shadow: 0 0 0 2px #ffd54a !important; }
-  #easyread-panel .er-close { background: #34343a !important; color: #ddd !important; }
+  color: #c9c7d4 !important;
+  min-width: 64px !important;
+  font-variant-numeric: tabular-nums !important;
 }

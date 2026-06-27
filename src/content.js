@@ -1,12 +1,11 @@
-// EasyRead — content script
+// EasyRead — content script (RSVP speed reader)
 //
 // Injected on demand into the active tab. Grabs the user's selection (or the
-// page's main article), opens a clean reader overlay, and reads it aloud
-// word-by-word using the browser's built-in speech engine.
+// page's main article) and presents it ONE MAGNIFIED WORD AT A TIME at a chosen
+// words-per-minute pace (Rapid Serial Visual Presentation). A fixed red "optimal
+// recognition point" keeps each word aligned so the eyes stay still.
 //
-// Re-injection safety: the background script may run this file again on a tab
-// where it already exists. In that case we just re-run start() rather than
-// rebuilding the module or stacking event listeners.
+// Re-injection safe: re-running this file just re-opens the reader.
 
 (() => {
   if (window.__easyRead) {
@@ -14,79 +13,49 @@
     return;
   }
 
-  const synth = window.speechSynthesis;
-
   // ---- State ------------------------------------------------------------
-  let panel = null;       // overlay element
-  let wordTokens = [];    // [{ start, end, el }] sorted by start, for highlighting
-  let chunks = [];        // [{ text, offset }] sentence-sized pieces to speak
-  let chunkIndex = 0;     // which sentence is currently being spoken
-  let wordCursor = 0;     // index into wordTokens of the current word
-  let isPaused = false;
-  let activeWordEl = null;
-  let voices = [];
-  const settings = { rate: 1, voiceURI: null };
+  let overlay = null;
+  let displayEl = null;
+  let progressEl = null;
+  let counterEl = null;
+  let wpmValEl = null;
+  let playBtn = null;
 
-  // ---- Persisted settings ----------------------------------------------
-  chrome.storage?.sync?.get(["rate", "voiceURI"], (s) => {
-    if (s && typeof s.rate === "number") settings.rate = s.rate;
-    if (s && s.voiceURI) settings.voiceURI = s.voiceURI;
+  let words = [];        // array of word strings
+  let idx = 0;           // current word index
+  let playing = false;
+  let timer = null;
+
+  const settings = { wpm: 300 };
+
+  chrome.storage?.sync?.get(["wpm"], (s) => {
+    if (s && typeof s.wpm === "number") {
+      settings.wpm = s.wpm;
+      if (wpmValEl) setWpm(s.wpm);
+    }
   });
   function saveSettings() {
-    chrome.storage?.sync?.set({ rate: settings.rate, voiceURI: settings.voiceURI });
+    chrome.storage?.sync?.set({ wpm: settings.wpm });
   }
 
-  // ---- Voices -----------------------------------------------------------
-  function loadVoices() {
-    voices = synth.getVoices();
-  }
-  loadVoices();
-  if (typeof synth !== "undefined" && "onvoiceschanged" in synth) {
-    synth.onvoiceschanged = () => {
-      loadVoices();
-      if (panel) fillVoiceSelect();
-    };
-  }
-
-  function pickVoice() {
-    if (settings.voiceURI) {
-      const v = voices.find((x) => x.voiceURI === settings.voiceURI);
-      if (v) return v;
-    }
-    const lang = (document.documentElement.lang || navigator.language || "en").slice(0, 2);
-    return (
-      voices.find((v) => v.lang.startsWith(lang) && v.localService) ||
-      voices.find((v) => v.lang.startsWith(lang)) ||
-      voices.find((v) => v.default) ||
-      voices[0] ||
-      null
-    );
-  }
-
-  // ---- Text extraction --------------------------------------------------
+  // ---- Text extraction (shared heuristic) -------------------------------
   function getSelectionText() {
     const sel = window.getSelection();
     const t = sel ? sel.toString() : "";
     return t.trim().length > 1 ? t : "";
   }
 
-  // Lightweight readability heuristic: prefer <article>, collect block text,
-  // fall back to the container's innerText if there are no semantic blocks.
   function extractArticle() {
     const root = document.querySelector("article") || document.body;
     const clone = root.cloneNode(true);
     clone
       .querySelectorAll("script,style,noscript,nav,header,footer,aside,form,button,svg,iframe")
       .forEach((n) => n.remove());
-
     const blocks = Array.from(clone.querySelectorAll("p,li,h1,h2,h3,blockquote"))
       .map((el) => el.innerText.trim())
       .filter(Boolean);
-
     let text = blocks.join("\n\n");
-    if (text.replace(/\s/g, "").length < 200) {
-      text = (root.innerText || "").trim();
-    }
+    if (text.replace(/\s/g, "").length < 200) text = (root.innerText || "").trim();
     return text;
   }
 
@@ -94,296 +63,215 @@
     return getSelectionText() || extractArticle();
   }
 
-  // ---- Tokenizing -------------------------------------------------------
-  function tokenize(text) {
-    const tokens = []; // { text, start, isWord }
-    const re = /(\s+)|([^\s]+)/g;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-      tokens.push({ text: m[0], start: m.index, isWord: m[2] != null });
-    }
-    return tokens;
-  }
-
-  // Sentence-sized chunks avoid Chrome's long-utterance cutoff and keep
-  // playback responsive. Each chunk records its character offset in the text.
-  function sentenceChunks(text) {
+  // Split into words. Very long tokens (e.g. URLs) are broken so they never
+  // overflow the display.
+  function toWords(text) {
+    const raw = text.split(/\s+/).filter(Boolean);
     const out = [];
-    const re = /[^.!?\n]+[.!?]*\n*|\n+/g;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-      if (m[0].trim().length === 0) continue;
-      out.push({ text: m[0], offset: m.index });
+    for (const w of raw) {
+      if (w.length <= 13) out.push(w);
+      else for (let i = 0; i < w.length; i += 13) out.push(w.slice(i, i + 13));
     }
-    if (out.length === 0 && text.trim()) out.push({ text, offset: 0 });
     return out;
   }
 
-  // Binary search: index of the first word token covering/after a char index.
-  function firstWordIndexAtChar(c) {
-    let lo = 0;
-    let hi = wordTokens.length - 1;
-    let ans = 0;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (wordTokens[mid].end > c) {
-        ans = mid;
-        hi = mid - 1;
-      } else {
-        lo = mid + 1;
-      }
-    }
-    return ans;
+  // ---- Optimal Recognition Point (pivot letter) -------------------------
+  function orpIndex(word) {
+    const L = word.length;
+    if (L <= 1) return 0;
+    if (L <= 5) return 1;
+    if (L <= 9) return 2;
+    if (L <= 13) return 3;
+    return 4;
   }
 
-  // ---- Overlay ----------------------------------------------------------
-  let readerEl = null;
-  let voiceSelectEl = null;
+  function renderWord(w) {
+    if (!displayEl) return;
+    const p = orpIndex(w);
+    const pre = w.slice(0, p);
+    const piv = w.slice(p, p + 1);
+    const post = w.slice(p + 1);
 
-  function fillVoiceSelect() {
-    if (!voiceSelectEl) return;
-    voiceSelectEl.innerHTML = "";
-    voices.forEach((v) => {
-      const opt = document.createElement("option");
-      opt.value = v.voiceURI;
-      opt.textContent = `${v.name} (${v.lang})`;
-      voiceSelectEl.appendChild(opt);
-    });
-    const chosen = pickVoice();
-    if (chosen) voiceSelectEl.value = chosen.voiceURI;
+    const word = document.createElement("div");
+    word.className = "er-rsvp-word";
+    // Monospace + ch units => shifting the word left by (pre length + half the
+    // pivot) lands the pivot's centre exactly on the fixed guide at 50%.
+    word.style.left = "50%";
+    word.style.transform = `translateX(-${pre.length + 0.5}ch)`;
+
+    const s1 = document.createElement("span");
+    s1.textContent = pre; // textContent => page text can't inject markup
+    const s2 = document.createElement("span");
+    s2.className = "er-orp";
+    s2.textContent = piv;
+    const s3 = document.createElement("span");
+    s3.textContent = post;
+
+    word.append(s1, s2, s3);
+    displayEl.replaceChildren(word);
   }
 
-  function buildPanel(text) {
-    closePanel();
-
-    panel = document.createElement("div");
-    panel.id = "easyread-panel";
-    panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-label", "EasyRead reader");
-    panel.innerHTML = `
-      <div class="er-bar">
-        <div class="er-title">EasyRead</div>
-        <div class="er-controls">
-          <button class="er-btn" id="er-playpause" title="Play / Pause (Space)" aria-label="Play or pause">⏸</button>
-          <button class="er-btn" id="er-stop" title="Stop" aria-label="Stop">⏹</button>
-          <label class="er-speed">Speed <span id="er-rate-val">1.0×</span>
-            <input type="range" id="er-rate" min="0.5" max="2.5" step="0.1" value="1" aria-label="Reading speed">
-          </label>
-          <select class="er-voice" id="er-voice" title="Voice" aria-label="Voice"></select>
-          <button class="er-btn er-close" id="er-close" title="Close (Esc)" aria-label="Close">✕</button>
-        </div>
-      </div>
-      <div class="er-reader" id="er-reader" tabindex="0"></div>
-    `;
-    document.documentElement.appendChild(panel);
-
-    readerEl = panel.querySelector("#er-reader");
-
-    // Render words as spans so each can be highlighted and clicked.
-    const tokens = tokenize(text);
-    wordTokens = [];
-    const frag = document.createDocumentFragment();
-    for (const tok of tokens) {
-      if (tok.isWord) {
-        const span = document.createElement("span");
-        span.className = "er-word";
-        span.textContent = tok.text; // textContent => page text can never inject HTML
-        wordTokens.push({ start: tok.start, end: tok.start + tok.text.length, el: span });
-        frag.appendChild(span);
-      } else {
-        frag.appendChild(document.createTextNode(tok.text));
-      }
-    }
-    readerEl.appendChild(frag);
-
-    // Click a word to jump there.
-    readerEl.addEventListener("click", (e) => {
-      const w = e.target.closest(".er-word");
-      if (!w) return;
-      const t = wordTokens.find((x) => x.el === w);
-      if (t) jumpToChar(t.start);
-    });
-
-    voiceSelectEl = panel.querySelector("#er-voice");
-    fillVoiceSelect();
-
-    // Controls.
-    panel.querySelector("#er-playpause").addEventListener("click", togglePlay);
-    panel.querySelector("#er-stop").addEventListener("click", stopReading);
-    panel.querySelector("#er-close").addEventListener("click", closePanel);
-
-    const rate = panel.querySelector("#er-rate");
-    rate.value = settings.rate;
-    panel.querySelector("#er-rate-val").textContent = settings.rate.toFixed(1) + "×";
-    rate.addEventListener("input", () => {
-      settings.rate = parseFloat(rate.value);
-      panel.querySelector("#er-rate-val").textContent = settings.rate.toFixed(1) + "×";
-      saveSettings();
-      restartCurrentChunk(); // apply immediately
-    });
-
-    voiceSelectEl.addEventListener("change", () => {
-      settings.voiceURI = voiceSelectEl.value;
-      saveSettings();
-      restartCurrentChunk();
-    });
-
-    panel.addEventListener("keydown", (e) => {
-      if (e.code === "Space") { e.preventDefault(); togglePlay(); }
-      else if (e.code === "Escape") { e.preventDefault(); closePanel(); }
-    });
-    readerEl.focus();
+  // ---- Pacing -----------------------------------------------------------
+  // Base delay from WPM, with a little extra on long words and at punctuation
+  // so sentences land naturally and comprehension holds.
+  function delayFor(w) {
+    let d = 60000 / settings.wpm;
+    if (/[.!?]["')\]]?$/.test(w)) d *= 2.2;
+    else if (/[,;:]["')\]]?$/.test(w)) d *= 1.5;
+    if (w.length > 8) d *= 1.15;
+    return d;
   }
 
-  // ---- Highlighting -----------------------------------------------------
-  function setActive(el) {
-    if (activeWordEl === el) return;
-    if (activeWordEl) activeWordEl.classList.remove("er-active");
-    el.classList.add("er-active");
-    activeWordEl = el;
-    ensureVisible(el);
-  }
-
-  // Only scroll when the word is actually out of view (smooth-scrolling on
-  // every single word is janky at speed).
-  function ensureVisible(el) {
-    if (!readerEl) return;
-    const r = readerEl.getBoundingClientRect();
-    const e = el.getBoundingClientRect();
-    if (e.top < r.top + 8 || e.bottom > r.bottom - 8) {
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
-    }
-  }
-
-  function highlightAtChar(globalChar) {
-    while (wordCursor < wordTokens.length - 1 && wordTokens[wordCursor].end <= globalChar) {
-      wordCursor++;
-    }
-    const tok = wordTokens[wordCursor];
-    if (tok) setActive(tok.el);
-  }
-
-  // ---- Speaking ---------------------------------------------------------
-  function speakFromChunk(idx) {
-    synth.cancel();
-    chunkIndex = idx;
-    isPaused = false;
-    updatePlayIcon();
-    speakNext();
-  }
-
-  function speakNext() {
-    if (chunkIndex >= chunks.length) {
-      if (activeWordEl) activeWordEl.classList.remove("er-active");
-      activeWordEl = null;
-      updatePlayIcon(true);
+  function tick() {
+    if (idx >= words.length) {
+      pause();
+      idx = words.length;
+      updateProgress();
       return;
     }
-    const chunk = chunks[chunkIndex];
-    const u = new SpeechSynthesisUtterance(chunk.text);
-    u.rate = settings.rate;
-    const v = pickVoice();
-    if (v) u.voice = v;
-
-    u.onboundary = (e) => {
-      if (e.name === "sentence") return;
-      highlightAtChar(chunk.offset + (e.charIndex || 0));
-    };
-    u.onend = () => {
-      if (isPaused) return;
-      chunkIndex++;
-      speakNext();
-    };
-    u.onerror = () => {
-      chunkIndex++;
-      speakNext();
-    };
-    synth.speak(u);
-  }
-
-  function restartCurrentChunk() {
-    if (!panel || chunks.length === 0) return;
-    wordCursor = firstWordIndexAtChar(chunks[chunkIndex]?.offset || 0);
-    speakFromChunk(chunkIndex);
-  }
-
-  function jumpToChar(globalChar) {
-    let idx = 0;
-    for (let i = 0; i < chunks.length; i++) {
-      if (chunks[i].offset <= globalChar) idx = i;
-      else break;
-    }
-    wordCursor = firstWordIndexAtChar(chunks[idx].offset);
-    speakFromChunk(idx);
+    renderWord(words[idx]);
+    updateProgress();
+    const d = delayFor(words[idx]);
+    timer = setTimeout(() => {
+      idx++;
+      if (playing) tick();
+    }, d);
   }
 
   // ---- Controls ---------------------------------------------------------
-  function togglePlay() {
-    if (synth.speaking && !isPaused) {
-      synth.pause();
-      isPaused = true;
-    } else if (isPaused) {
-      synth.resume();
-      isPaused = false;
-    } else {
-      speakFromChunk(0);
-    }
+  function play() {
+    if (idx >= words.length) idx = 0;
+    if (playing) return;
+    playing = true;
+    updatePlayIcon();
+    tick();
+  }
+  function pause() {
+    playing = false;
+    clearTimeout(timer);
     updatePlayIcon();
   }
-
-  function stopReading() {
-    synth.cancel();
-    isPaused = false;
-    chunkIndex = 0;
-    wordCursor = 0;
-    if (activeWordEl) activeWordEl.classList.remove("er-active");
-    activeWordEl = null;
-    updatePlayIcon(true);
+  function toggle() {
+    playing ? pause() : play();
+  }
+  function stepBy(n) {
+    pause();
+    idx = Math.min(words.length - 1, Math.max(0, idx + n));
+    renderWord(words[idx]);
+    updateProgress();
+  }
+  function restart() {
+    pause();
+    idx = 0;
+    renderWord(words[0]);
+    updateProgress();
+  }
+  function setWpm(v) {
+    settings.wpm = Math.min(900, Math.max(100, Math.round(v)));
+    if (wpmValEl) wpmValEl.textContent = settings.wpm + " wpm";
+    const slider = overlay && overlay.querySelector("#er-wpm");
+    if (slider) slider.value = settings.wpm;
   }
 
-  function updatePlayIcon(stopped = false) {
-    const btn = panel && panel.querySelector("#er-playpause");
-    if (!btn) return;
-    btn.textContent = stopped || isPaused || !synth.speaking ? "▶" : "⏸";
+  function updatePlayIcon() {
+    if (playBtn) playBtn.textContent = playing ? "⏸" : "▶";
+  }
+  function updateProgress() {
+    const shown = Math.min(idx + 1, words.length);
+    if (counterEl) counterEl.textContent = `${shown} / ${words.length}`;
+    if (progressEl) progressEl.style.width = (shown / words.length) * 100 + "%";
   }
 
-  function closePanel() {
-    synth.cancel();
-    isPaused = false;
-    if (panel) panel.remove();
-    panel = null;
-    readerEl = null;
-    voiceSelectEl = null;
-    wordTokens = [];
-    chunks = [];
-    chunkIndex = 0;
-    wordCursor = 0;
-    activeWordEl = null;
+  // ---- Overlay ----------------------------------------------------------
+  function buildOverlay() {
+    closeOverlay();
+    overlay = document.createElement("div");
+    overlay.id = "easyread-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-label", "EasyRead speed reader");
+    overlay.innerHTML = `
+      <div class="er-card">
+        <button class="er-x" id="er-close" title="Close (Esc)" aria-label="Close">✕</button>
+        <div class="er-stage">
+          <div class="er-guide er-guide-top"></div>
+          <div class="er-display" id="er-display" aria-live="polite"></div>
+          <div class="er-guide er-guide-bottom"></div>
+        </div>
+        <div class="er-track"><div class="er-track-fill" id="er-progress"></div></div>
+        <div class="er-controls">
+          <button class="er-btn" id="er-restart" title="Restart">⏮</button>
+          <button class="er-btn" id="er-back" title="Back (←)">◀</button>
+          <button class="er-btn er-play" id="er-play" title="Play / Pause (Space)">▶</button>
+          <button class="er-btn" id="er-fwd" title="Forward (→)">▶▶</button>
+          <span class="er-counter" id="er-counter">0 / 0</span>
+          <label class="er-wpm">
+            <input type="range" id="er-wpm" min="100" max="900" step="25" value="300" aria-label="Words per minute">
+            <span id="er-wpm-val">300 wpm</span>
+          </label>
+        </div>
+      </div>
+    `;
+    document.documentElement.appendChild(overlay);
+
+    displayEl = overlay.querySelector("#er-display");
+    progressEl = overlay.querySelector("#er-progress");
+    counterEl = overlay.querySelector("#er-counter");
+    wpmValEl = overlay.querySelector("#er-wpm-val");
+    playBtn = overlay.querySelector("#er-play");
+
+    overlay.querySelector("#er-close").addEventListener("click", closeOverlay);
+    overlay.querySelector("#er-restart").addEventListener("click", restart);
+    overlay.querySelector("#er-back").addEventListener("click", () => stepBy(-1));
+    overlay.querySelector("#er-fwd").addEventListener("click", () => stepBy(1));
+    playBtn.addEventListener("click", toggle);
+
+    const slider = overlay.querySelector("#er-wpm");
+    slider.addEventListener("input", () => { setWpm(parseInt(slider.value, 10)); saveSettings(); });
+
+    // Click the dim backdrop (outside the card) to close.
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeOverlay(); });
+
+    // Keyboard.
+    overlay.tabIndex = -1;
+    overlay.addEventListener("keydown", (e) => {
+      switch (e.code) {
+        case "Space": e.preventDefault(); toggle(); break;
+        case "Escape": e.preventDefault(); closeOverlay(); break;
+        case "ArrowLeft": e.preventDefault(); stepBy(-1); break;
+        case "ArrowRight": e.preventDefault(); stepBy(1); break;
+        case "ArrowUp": e.preventDefault(); setWpm(settings.wpm + 25); saveSettings(); break;
+        case "ArrowDown": e.preventDefault(); setWpm(settings.wpm - 25); saveSettings(); break;
+      }
+    });
+    overlay.focus();
+
+    setWpm(settings.wpm);
+  }
+
+  function closeOverlay() {
+    pause();
+    if (overlay) overlay.remove();
+    overlay = displayEl = progressEl = counterEl = wpmValEl = playBtn = null;
+    words = [];
+    idx = 0;
   }
 
   // ---- Entry point ------------------------------------------------------
   function start() {
-    if (!("speechSynthesis" in window)) {
-      alert("EasyRead: this browser doesn't support speech synthesis.");
-      return;
-    }
     const text = getText();
     if (!text || text.trim().length === 0) {
-      alert("EasyRead: no readable text found on this page. Try selecting some text first.");
+      alert("EasyRead: no readable text found. Try selecting some text first.");
       return;
     }
-    loadVoices();
-    buildPanel(text);
-    chunks = sentenceChunks(text);
-    chunkIndex = 0;
-    wordCursor = 0;
-    speakFromChunk(0);
+    buildOverlay();
+    words = toWords(text);
+    idx = 0;
+    renderWord(words[0]);
+    updateProgress();
+    play(); // auto-start
   }
 
-  // Stop speech if the user navigates away.
-  window.addEventListener("beforeunload", () => synth.cancel());
-
-  // Expose a stable handle so re-injection just re-runs start().
+  window.addEventListener("beforeunload", closeOverlay);
   window.__easyRead = { start };
   start();
 })();
