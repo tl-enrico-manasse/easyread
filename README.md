@@ -9,6 +9,12 @@
 ![Vanilla JS](https://img.shields.io/badge/built%20with-vanilla%20JS-f7df1e)
 ![PRs welcome](https://img.shields.io/badge/PRs-welcome-orange)
 
+<p align="center">
+  <img src="assets/demo.gif" alt="EasyRead speed-reading one magnified word at a time with a red focus point" width="660">
+  <br>
+  <em>Animated preview of the in-page overlay — one magnified word at a time, focus point in red.</em>
+</p>
+
 EasyRead uses **RSVP** (Rapid Serial Visual Presentation): instead of moving your
 eyes across lines of text, it shows each word in the same spot, big and centered,
 at a controlled words-per-minute speed. A red **optimal recognition point** keeps
