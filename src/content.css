@@ -1,0 +1,134 @@
+/* EasyRead overlay styles. Scoped under #easyread-panel and forced with
+   !important so host-page CSS can't break the reader. */
+
+#easyread-panel {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 2147483647 !important;
+  height: 44vh !important;
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18) !important;
+  border-top: 1px solid #e5e5e5 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  display: flex !important;
+  flex-direction: column !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#easyread-panel * {
+  box-sizing: border-box !important;
+}
+
+#easyread-panel .er-bar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 10px 16px !important;
+  background: #fafafa !important;
+  border-bottom: 1px solid #ececec !important;
+  flex: 0 0 auto !important;
+}
+
+#easyread-panel .er-title {
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  letter-spacing: 0.3px !important;
+  color: #6c4ad6 !important;
+}
+
+#easyread-panel .er-controls {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+}
+
+#easyread-panel .er-btn {
+  appearance: none !important;
+  border: none !important;
+  background: #6c4ad6 !important;
+  color: #fff !important;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 8px !important;
+  font-size: 15px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+}
+#easyread-panel .er-btn:hover { background: #5a3cc0 !important; }
+#easyread-panel .er-close {
+  background: #efefef !important;
+  color: #444 !important;
+}
+#easyread-panel .er-close:hover { background: #e2e2e2 !important; }
+
+#easyread-panel .er-speed {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 12px !important;
+  color: #555 !important;
+}
+#easyread-panel .er-speed input[type="range"] {
+  width: 90px !important;
+  accent-color: #6c4ad6 !important;
+}
+#easyread-panel #er-rate-val {
+  font-variant-numeric: tabular-nums !important;
+  min-width: 34px !important;
+  color: #333 !important;
+}
+
+#easyread-panel .er-voice {
+  max-width: 200px !important;
+  font-size: 12px !important;
+  padding: 6px 8px !important;
+  border: 1px solid #d8d8d8 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #222 !important;
+}
+
+#easyread-panel .er-reader {
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  padding: 24px max(16px, calc((100% - 760px) / 2)) 40px !important;
+  font-size: 21px !important;
+  line-height: 1.7 !important;
+  white-space: pre-wrap !important;
+  color: #222 !important;
+  outline: none !important;
+}
+
+#easyread-panel .er-word {
+  cursor: pointer !important;
+  border-radius: 4px !important;
+  transition: background 0.1s ease !important;
+}
+#easyread-panel .er-word:hover {
+  background: #efeaff !important;
+}
+#easyread-panel .er-word.er-active {
+  background: #ffe27a !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 0 0 2px #ffe27a !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  #easyread-panel { background: #1e1e22 !important; color: #eaeaea !important; border-top-color: #333 !important; }
+  #easyread-panel .er-bar { background: #26262b !important; border-bottom-color: #333 !important; }
+  #easyread-panel .er-reader { color: #e6e6e6 !important; }
+  #easyread-panel .er-voice { background: #2a2a30 !important; color: #eee !important; border-color: #444 !important; }
+  #easyread-panel .er-word:hover { background: #3a3358 !important; }
+  #easyread-panel .er-word.er-active { background: #ffd54a !important; color: #111 !important; box-shadow: 0 0 0 2px #ffd54a !important; }
+  #easyread-panel .er-close { background: #34343a !important; color: #ddd !important; }
+}
